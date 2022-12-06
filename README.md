@@ -30,6 +30,9 @@ Fixed some errors in domoticz log file
 04.03.2020 v0.03 beta\
 Fixed some more errors in domoticz log file
 
+06.12.2022 v0.04 beta\
+Plugin updated for Domoticz 2022.2
+
 ### Authors
 
 * **ACE** - [e-mail](mailto:a_c_e@mail.ru)
