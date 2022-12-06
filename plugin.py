@@ -2,19 +2,22 @@
 #
 # Author: ACE ace@imlazy.ru 
 #
+# https://github.com/ACE1046/LazyRollsDomoticz
+#
 # v0.01 29.02.2020
 # v0.02 30.02.2020 Fixed some errors in domoticz log file
 # v0.03 30.02.2020 Fixed some more errors in domoticz log file
+# v0.04 06.12.2022 Plugin updated for Domoticz 2022.2
 #
 """
-<plugin key="LazyRolls" name="LazyRolls roller blinds" author="ACE" version="0.03" wikilink="http://imlazy.ru/rolls/domoticz.html" externallink="http://imlazy.ru/">
+<plugin key="LazyRolls" name="LazyRolls roller blinds" author="ACE" version="0.04" wikilink="http://imlazy.ru/rolls/domoticz.html" externallink="http://imlazy.ru/">
     <description>
         <h2>LazyRolls roller blinds plugin</h2><br/>
         <h3>Configuration</h3>
         Configuration options:
     </description>
     <params>
-	<param field="Address" label="IP Address" width="200px" required="true" default="127.0.0.1"/>
+  <param field="Address" label="IP Address" width="200px" required="true" default="127.0.0.1"/>
     </params>
 </plugin>
 """
@@ -25,13 +28,14 @@ class BasePlugin:
     httpCmd = None
     GoTo = 0
     NextUpdate = 0
+    CmdStop = 0
 
     def __init__(self):
         return
 
     def onStart(self):
         # Domoticz.Log("onStart called")
-       	if Parameters["Mode6"] == "Debug":
+        if Parameters["Mode6"] == "Debug":
             Domoticz.Debugging(1)
             DumpConfigToLog()
         
@@ -47,24 +51,35 @@ class BasePlugin:
     def onConnect(self, Connection, Status, Description):
         #Domoticz.Log("onConnect called")
         if (Connection == self.httpCmd):
-            sendData = { 'Verb' : 'GET',
+            if (self.CmdStop == 1):
+                sendData = { 'Verb' : 'GET',
+                    'URL'  : '/stop',
+                    'Headers' : { 'Content-Type': 'text/xml; charset=utf-8', \
+                        'Connection': 'keep-alive', \
+                        'Accept': 'Content-Type: text/html; charset=UTF-8', \
+                        'Host': Parameters["Address"]+":80", \
+                        'User-Agent':'Domoticz/1.0' }
+                        }
+                self.CmdStop = 0
+            else:
+                sendData = { 'Verb' : 'GET',
                     'URL'  : '/set?pos='+str(self.GoTo),
-                     'Headers' : { 'Content-Type': 'text/xml; charset=utf-8', \
-                                   'Connection': 'keep-alive', \
-                                   'Accept': 'Content-Type: text/html; charset=UTF-8', \
-                                   'Host': Parameters["Address"]+":80", \
-                                   'User-Agent':'Domoticz/1.0' }
-                   }
+                    'Headers' : { 'Content-Type': 'text/xml; charset=utf-8', \
+                        'Connection': 'keep-alive', \
+                        'Accept': 'Content-Type: text/html; charset=UTF-8', \
+                        'Host': Parameters["Address"]+":80", \
+                        'User-Agent':'Domoticz/1.0' }
+                        }
             self.httpCmd.Send(sendData)
         if (Connection == self.httpXml):
             sendData = { 'Verb' : 'GET',
-                    'URL'  : '/xml',
-                     'Headers' : { 'Content-Type': 'text/xml; charset=utf-8', \
-                                   'Connection': 'keep-alive', \
-                                   'Accept': 'Content-Type: text/html; charset=UTF-8', \
-                                   'Host': Parameters["Address"]+":80", \
-                                   'User-Agent':'Domoticz/1.0' }
-                   }
+                'URL'  : '/xml',
+                'Headers' : { 'Content-Type': 'text/xml; charset=utf-8', \
+                    'Connection': 'keep-alive', \
+                    'Accept': 'Content-Type: text/html; charset=UTF-8', \
+                    'Host': Parameters["Address"]+":80", \
+                    'User-Agent':'Domoticz/1.0' }
+                    }
             self.httpXml.Send(sendData)
 
     def onMessage(self, Connection, Data):
@@ -85,10 +100,10 @@ class BasePlugin:
                 if (p_max == 0): p_max=100;
                 percent = round(p_now*100/p_max)
                 nVal = 2
-                if (p_now <= 0): nVal = 0
-                if (p_now >= p_max): nVal = 1
+                if (p_now <= 0): nVal = 1
+                if (p_now >= p_max): nVal = 0
                 for d in Devices:
-                    Devices[d].Update(nVal, str(percent))
+                    Devices[d].Update(nVal, str(100-percent))
                 #Domoticz.Log(str(percent))
                 if (p_now == p_dst): 
                     Domoticz.Heartbeat(10);
@@ -104,10 +119,14 @@ class BasePlugin:
         if (Connection.Connected()): Connection.Disconnect()
 
     def onCommand(self, Unit, Command, Level, Hue):
+        self.CmdStop = 0
         #Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
-        if (Command == "Set Level"): self.GoTo=Level
-        if (Command == "Off"): self.GoTo=0
-        if (Command == "On"): self.GoTo=100
+        if (Command == "Set Level"): self.GoTo=100-Level
+        if (Command == "Off"): self.GoTo=100
+        if (Command == "On"): self.GoTo=0
+        if (Command == "Open"): self.GoTo=0
+        if (Command == "Close"): self.GoTo=100
+        if (Command == "Stop"): self.CmdStop = 1
         self.httpCmd.Connect()
 
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
